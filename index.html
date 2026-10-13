@@ -30,16 +30,24 @@ input[type=range]{accent-color:var(--acc)}
 button{background:var(--acc);color:var(--on-acc);min-height:36px;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 input:disabled{opacity:.4;cursor:not-allowed}label.off{opacity:.6}
-td.c{background:rgba(var(--acc-rgb),calc(var(--hm-max)*var(--w)))}
+.hmw{width:100%;outline-offset:3px;border-radius:6px}
+.hm{display:grid;grid-template-columns:clamp(44px,17vw,100px) repeat(var(--n),minmax(0,1fr));gap:2px;width:100%;max-width:calc(var(--n)*76px + 100px);font-size:.75rem}
+.hm>div{min-width:0}
+.ch,.rh{color:var(--mut);display:flex;overflow:hidden;white-space:nowrap}
+.rh{justify-content:flex-end;align-items:center;padding-right:6px}
+.rh span{overflow:hidden;text-overflow:ellipsis}
+.ch{justify-content:center;align-items:flex-end;padding-bottom:4px}
+.ch span{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.hmw.vert .ch{height:68px}
+.hmw.vert .ch span{writing-mode:vertical-rl;transform:rotate(180deg);max-height:64px;max-width:none}
+.c{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:pointer;color:var(--ink);background:rgba(var(--acc-rgb),calc(var(--hm-max)*var(--w)));-webkit-tap-highlight-color:transparent}
+.c.sel{outline:2px solid var(--ink);outline-offset:-2px}
+.hmw.nonum .c{font-size:0}
 /* iOS Safari zooms the page on focus if a field is under 16px */
 select,input[type=number],textarea,button{font-size:16px;border-radius:8px;touch-action:manipulation}
 textarea,button{-webkit-appearance:none;appearance:none}
 .cap{margin:6px 0 0;font-size:.8rem;color:var(--mut);min-height:1.2em}
 @media (pointer:coarse),(max-width:600px){select,input[type=number],button{min-height:44px}input[type=range]{height:32px}}
-.scroll{overflow-x:auto}
-table.hm{border-collapse:collapse;font-size:.75rem}
-table.hm td,table.hm th{padding:4px 6px;text-align:center;border:1px solid var(--line);min-width:34px}
-table.hm th{color:var(--mut);font-weight:500;white-space:nowrap}
 .big{font-size:2rem;font-weight:600;letter-spacing:-.02em}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:.88rem}
 .kv span:nth-child(odd){color:var(--mut)}
@@ -69,8 +77,8 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:.85em}
 <div class="card"><h2>Sentence B</h2><textarea id="b" aria-label="Sentence B">the word vector rotates in four dimensions</textarea></div>
 </div>
 
-<div class="card" style="margin-top:14px"><h2>Attention weights: sentence A</h2><div class="scroll" id="hmA"></div><p class="cap" id="capA" aria-live="polite"></p></div>
-<div class="card"><h2>Attention weights: sentence B</h2><div class="scroll" id="hmB"></div><p class="cap" id="capB" aria-live="polite"></p></div>
+<div class="card" style="margin-top:14px"><h2>Attention weights: sentence A</h2><div class="hmw" id="hmA"></div><p class="cap" id="roA" aria-live="polite"></p><p class="cap" id="capA" aria-live="polite"></p></div>
+<div class="card"><h2>Attention weights: sentence B</h2><div class="hmw" id="hmB"></div><p class="cap" id="roB" aria-live="polite"></p><p class="cap" id="capB" aria-live="polite"></p></div>
 
 <div class="grid">
 <div class="card"><h2>Sentence similarity</h2><div class="big" id="sim" aria-live="polite">–</div><div style="color:var(--mut);font-size:.85rem">Cosine of mean-pooled outputs (A vs B)</div></div>
@@ -133,15 +141,31 @@ function run(X,P){
  return{S:S,A:A,Y:Y}}
 function pool(Y,C){var m=new Float64Array(4*C);Y.forEach(function(y){for(var i=0;i<m.length;i++)m[i]+=y[i]/Y.length});return m}
 function cos(a,b){var d=0,x=0,y=0;for(var i=0;i<a.length;i++){d+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i]}return d/(Math.sqrt(x*y)+1e-12)}
-function heat(el,toks,A){
- if(!toks.length){el.textContent="Type some words.";return}
+function esc(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+var HM={};
+function fit(el){var c=el.querySelector(".c");if(!c)return;var w=c.getBoundingClientRect().width;
+ el.classList.toggle("nonum",w<30);el.classList.toggle("vert",w<46)}
+function pick(el,i,j){var d=HM[el.id];if(!d)return;var n=d.t.length;i=Math.max(0,Math.min(n-1,i));j=Math.max(0,Math.min(n-1,j));d.i=i;d.j=j;
+ var o=el.querySelector(".sel");if(o)o.classList.remove("sel");
+ var c=el.querySelector('.c[data-i="'+i+'"][data-j="'+j+'"]');if(c)c.classList.add("sel");
+ d.ro.textContent="query \u201c"+d.t[i]+"\u201d \u2192 key \u201c"+d.t[j]+"\u201d: "+d.A[i][j].toFixed(3)+" (row sums to 1)"}
+function heat(el,toks,A,ro){
+ var n=toks.length;
+ if(!n){el.className="hmw";el.textContent="Type some words.";ro.textContent="";HM[el.id]=null;return}
  var mx=0;A.forEach(function(r){r.forEach(function(v){if(v>mx)mx=v})});
- el.tabIndex=0;el.setAttribute("role","region");el.setAttribute("aria-label","Attention weight matrix, scrollable");
- var h="<table class='hm'><tr><th></th>"+toks.map(function(t){return"<th>"+t.replace(/</g,"&lt;")+"</th>"}).join("")+"</tr>";
- for(var i=0;i<toks.length;i++){h+="<tr><th>"+toks[i].replace(/</g,"&lt;")+"</th>";
-  for(var j=0;j<toks.length;j++){var v=A[i][j];h+="<td title='"+v.toFixed(3)+"' class='c' style='--w:"+(mx>0?v/mx:0).toFixed(2)+"'>"+v.toFixed(2)+"</td>"}
-  h+="</tr>"}
- el.innerHTML=h+"</table>"}
+ var prev=HM[el.id],i0=prev?prev.i:0,j0=prev?prev.j:0;
+ HM[el.id]={t:toks,A:A,i:i0,j:j0,ro:ro};
+ el.tabIndex=0;el.setAttribute("aria-label","Attention matrix. Arrow keys inspect cells.");
+ var h="<div class='hm' style='--n:"+n+"'><div></div>";
+ toks.forEach(function(t){h+="<div class='ch' title=\""+esc(t)+"\"><span>"+esc(t)+"</span></div>"});
+ for(var i=0;i<n;i++){h+="<div class='rh' title=\""+esc(toks[i])+"\"><span>"+esc(toks[i])+"</span></div>";
+  for(var j=0;j<n;j++){var v=A[i][j];h+="<div class='c' data-i='"+i+"' data-j='"+j+"' style='--w:"+(mx>0?v/mx:0).toFixed(2)+"'>"+(v>=0.995?"1":v.toFixed(2).slice(1))+"</div>"}}
+ el.innerHTML=h+"</div>";
+ if(!el._wired){el._wired=1;
+  el.addEventListener("click",function(e){var c=e.target.closest&&e.target.closest(".c");if(c)pick(el,+c.dataset.i,+c.dataset.j)});
+  el.addEventListener("keydown",function(e){var d=HM[el.id];if(!d)return;var m={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]}[e.key];if(m){e.preventDefault();pick(el,d.i+m[0],d.j+m[1])}});
+  if(window.ResizeObserver)new ResizeObserver(function(){fit(el)}).observe(el);else window.addEventListener("resize",function(){fit(el)})}
+ el.classList.remove("vert");el.classList.remove("nonum");el.classList.add("hmw");fit(el);pick(el,i0,j0)}
 function rot(){var r=[0,0,0,0].map(function(){return gauss(Math.random)}),n=Math.hypot.apply(null,r);return Float64Array.from(r.map(function(x){return x/n}))}
 function update(){
  var C=+$("C").value,seed=+$("seed").value||0,kap=+$("kappa").value,m=$("metric").value;
@@ -152,7 +176,7 @@ function update(){
  $("capB").textContent=tb0.length>MAXT?"Showing the first "+MAXT+" of "+tb0.length+" words.":"";
  var XA=ta.map(function(w){return embed(w,C,seed)}),XB=tb.map(function(w){return embed(w,C,seed)});
  var RA=run(XA,P),RB=run(XB,P);
- heat($("hmA"),ta,RA.A);heat($("hmB"),tb,RB.A);
+ heat($("hmA"),ta,RA.A,$("roA"));heat($("hmB"),tb,RB.A,$("roB"));
  $("sim").textContent=(ta.length&&tb.length)?cos(pool(RA.Y,C),pool(RB.Y,C)).toFixed(3):"–";
  // rotation test on sentence A
  if(ta.length){
