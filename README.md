@@ -2,6 +2,8 @@
 
 An interactive, single-file demo of **quaternionic embeddings** and **metric-based attention**, running entirely in your browser. No build step, no dependencies, no server.
 
+**Live demo:** `https://subunits.github.io/qk-lab/`
+
 ## What it does
 
 Type two sentences. The app:
@@ -11,7 +13,7 @@ Type two sentences. The app:
 3. Scores attention with a metric you choose: **Euclidean**, **spherical** or **hyperbolic**.
 4. Shows the attention weights as a heatmap for each sentence, the cosine similarity of the two sentences, a live **rotation-invariance test**, and a **parameter count** against a real-valued layer.
 
-Click or tap any heatmap cell to read its exact value. With the matrix focused, the arrow keys move the selection.
+The rotation test draws a fresh random rotation every time anything changes. Click or tap any heatmap cell to read its exact value. With the matrix focused, the arrow keys move the selection.
 
 ## Important: what this is not
 
@@ -45,7 +47,6 @@ Scores go through a softmax per row, values are mixed with the weights, and the 
 | Curvature κ | Scales the geometry. Disabled for Euclidean, where it has no effect |
 | Quaternion channels C | 4, 8 or 16 channels per word |
 | Seed | Changes the random embeddings and weights |
-| New rotation | Draws a new random rotation for the invariance test |
 
 ## Run it locally
 
@@ -56,7 +57,7 @@ Open `index.html` in any modern browser. That's it.
 1. Rename `qk-nlp-lab.html` to `index.html` and commit it with this README.
 2. In the repo, open **Settings → Pages**.
 3. Choose the `main` branch and the `/ (root)` folder, then save.
-4. After a minute or two the page is live at `https://<your-username>.github.io/<repo-name>/`.
+4. After a minute or two the page is live at `https://subunits.github.io/qk-lab/`.
 
 ## Responsive behaviour
 
@@ -81,4 +82,4 @@ Checked in headless Chromium (Playwright) across seven viewport sizes from 320 p
 
 ## License
 
-Choose a license before publishing, for example MIT to match your earlier repositories.
+MIT. See [LICENSE](LICENSE).
