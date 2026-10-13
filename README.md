@@ -2,8 +2,6 @@
 
 An interactive, single-file demo of **quaternionic embeddings** and **metric-based attention**, running entirely in your browser. No build step, no dependencies, no server.
 
-**Live demo:** `[https://<your-username>.github.io/qk-lab/](https://subunits.github.io/qk-lab/)`
-
 ## What it does
 
 Type two sentences. The app:
