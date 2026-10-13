@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QK-NLP Lab</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1c1b19;--mut:#6b6860;--line:#dedbd2;--acc:#2b5fd9;--acc-rgb:43,95,217;--ok:#1a7f4b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131412;--card:#1d1e1b;--ink:#ecebe6;--mut:#9a978d;--line:#34352f;--acc:#7ea2ff;--acc-rgb:126,162,255;--ok:#5fd394}}
+:root[data-theme="dark"]{--bg:#131412;--card:#1d1e1b;--ink:#ecebe6;--mut:#9a978d;--line:#34352f;--acc:#7ea2ff;--acc-rgb:126,162,255;--ok:#5fd394}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 10px}
+.sub{color:var(--mut);margin:0 0 16px}
+.note{border-left:3px solid var(--acc);background:var(--card);padding:8px 12px;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:.88rem;color:var(--mut)}
+.grid{display:grid;gap:14px;grid-template-columns:1fr 1fr}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;min-width:0}
+.grid .card{margin-bottom:0}
+textarea{width:100%;min-height:64px;resize:vertical;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit}
+.ctl{display:flex;flex-wrap:wrap;gap:14px;align-items:end}
+label{display:flex;flex-direction:column;font-size:.8rem;color:var(--mut);gap:4px}
+select,input[type=number]{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit}
+input[type=range]{accent-color:var(--acc)}
+button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+:root:not([data-theme="light"]) button{color:#0d0e0c}
+.scroll{overflow-x:auto}
+table.hm{border-collapse:collapse;font-size:.75rem}
+table.hm td,table.hm th{padding:4px 6px;text-align:center;border:1px solid var(--line);min-width:34px}
+table.hm th{color:var(--mut);font-weight:500;white-space:nowrap}
+.big{font-size:2rem;font-weight:600;letter-spacing:-.02em}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:.88rem}
+.kv span:nth-child(odd){color:var(--mut)}
+.ok{color:var(--ok);font-weight:600}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.85em}
+</style>
+</head>
+<body>
+<main>
+<h1>QK-NLP Lab</h1>
+<p class="sub">Quaternionic embeddings + metric-based attention, running live in your browser.</p>
+<div class="note">Weights are random and untrained, so similarity scores show the geometry at work, not learned meaning. Words that are shared between sentences get identical embeddings, which is what drives the similarity number.</div>
+
+<div class="card">
+<h2>Controls</h2>
+<div class="ctl">
+<label>Metric<select id="metric"><option value="euclidean">Euclidean</option><option value="spherical">Spherical</option><option value="hyperbolic">Hyperbolic</option></select></label>
+<label>Curvature κ: <b id="kv">1.0</b><input id="kappa" type="range" min="0.1" max="3" step="0.1" value="1"></label>
+<label>Quaternion channels C<select id="C"><option>4</option><option selected>8</option><option>16</option></select></label>
+<label>Seed<input id="seed" type="number" value="42" style="width:90px"></label>
+<button id="rerun">New rotation</button>
+</div>
+</div>
+
+<div class="grid">
+<div class="card"><h2>Sentence A</h2><textarea id="a">the quaternion rotates the word vector</textarea></div>
+<div class="card"><h2>Sentence B</h2><textarea id="b">the word vector rotates in four dimensions</textarea></div>
+</div>
+
+<div class="card" style="margin-top:14px"><h2>Attention weights: sentence A</h2><div class="scroll" id="hmA"></div></div>
+<div class="card"><h2>Attention weights: sentence B</h2><div class="scroll" id="hmB"></div></div>
+
+<div class="grid">
+<div class="card"><h2>Sentence similarity</h2><div class="big" id="sim">–</div><div style="color:var(--mut);font-size:.85rem">Cosine of mean-pooled outputs (A vs B)</div></div>
+<div class="card"><h2>Rotation test</h2>
+<div class="kv"><span>Random rotation r</span><span id="rq"></span>
+<span>Max score change</span><span id="d1"></span>
+<span>Max |f(rx) − r·f(x)|</span><span id="d2"></span></div>
+<div style="color:var(--mut);font-size:.82rem;margin-top:6px">Left-multiplying every token by a unit quaternion <code>r</code> leaves attention scores unchanged and rotates the outputs, because weights multiply on the right.</div></div>
+</div>
+
+<div class="card" style="margin-top:14px"><h2>Parameters (Q, K, V projections)</h2>
+<div class="kv"><span>Quaternion linear (3 × 4C²)</span><span id="pq"></span>
+<span>Real linear, same width (3 × 16C²)</span><span id="pr"></span>
+<span>Ratio</span><span id="pt"></span></div>
+<div style="color:var(--mut);font-size:.82rem;margin-top:6px">Weight sharing in the Hamilton product gives 4× fewer parameters per linear layer at equal width. This is not the blanket "50%" in the repo READMEs.</div></div>
+</main>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id)};
+function hash(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){var a=seed>>>0;return function(){a=(a+0x6D2B79F5)|0;var t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}}
+function gauss(r){return Math.sqrt(-2*Math.log(r()+1e-12))*Math.cos(2*Math.PI*r())}
+function tok(s){return (s.toLowerCase().match(/[\p{L}\p{N}']+/gu)||[]).slice(0,16)}
+function qmul(a,ai,b,bi,o,oi){ // o += a*b (Hamilton)
+ var a0=a[ai],a1=a[ai+1],a2=a[ai+2],a3=a[ai+3],b0=b[bi],b1=b[bi+1],b2=b[bi+2],b3=b[bi+3];
+ o[oi]+=a0*b0-a1*b1-a2*b2-a3*b3;
+ o[oi+1]+=a0*b1+a1*b0+a2*b3-a3*b2;
+ o[oi+2]+=a0*b2-a1*b3+a2*b0+a3*b1;
+ o[oi+3]+=a0*b3+a1*b2-a2*b1+a3*b0}
+function embed(w,C,seed){var r=rng(hash(w)^Math.imul(seed+1,2654435761)),v=new Float64Array(4*C);for(var i=0;i<v.length;i++)v[i]=gauss(r)*.5;return v}
+function weights(n,C,seed){var r=rng(hash(n)^Math.imul(seed+7,2246822519)),w=new Float64Array(4*C*C),s=.5/Math.sqrt(C);for(var i=0;i<w.length;i++)w[i]=gauss(r)*s;return w}
+function lin(x,W,C){ // out_j = sum_i x_i * W_ji  (right multiplication)
+ var o=new Float64Array(4*C);
+ for(var j=0;j<C;j++)for(var i=0;i<C;i++)qmul(x,4*i,W,4*(j*C+i),o,4*j);
+ return o}
+function score(q,k,C,m,kap){
+ if(m==="euclidean"){var s=0;for(var i=0;i<4*C;i++)s+=q[i]*k[i];return s/Math.sqrt(4*C)}
+ var t=0;
+ for(var c=0;c<C;c++){var o=4*c,nq=0,nk=0,dot=0,dd=0,d;
+  for(var e=0;e<4;e++){nq+=q[o+e]*q[o+e];nk+=k[o+e]*k[o+e];dot+=q[o+e]*k[o+e]}
+  nq=Math.sqrt(nq)+1e-9;nk=Math.sqrt(nk)+1e-9;
+  if(m==="spherical"){d=Math.acos(Math.max(-1,Math.min(1,dot/(nq*nk))))}
+  else{ // Poincare ball: u = q/|q| * tanh(sqrt(kap)|q|)
+   var sq=Math.tanh(Math.sqrt(kap)*nq)/nq,sk=Math.tanh(Math.sqrt(kap)*nk)/nk,uu=0,vv=0;
+   for(var e2=0;e2<4;e2++){var u=q[o+e2]*sq,v=k[o+e2]*sk;dd+=(u-v)*(u-v);uu+=u*u;vv+=v*v}
+   d=Math.acosh(1+2*dd/(Math.max(1e-9,1-uu)*Math.max(1e-9,1-vv)))}
+  t+=d*d}
+ return -(m==="spherical"?kap:1)*t/Math.sqrt(C)}
+function run(X,P){
+ var n=X.length,C=P.C,Q=X.map(function(x){return lin(x,P.Wq,C)}),K=X.map(function(x){return lin(x,P.Wk,C)}),V=X.map(function(x){return lin(x,P.Wv,C)});
+ var S=[],A=[],Y=[];
+ for(var t=0;t<n;t++){var row=[],mx=-1e9;
+  for(var u=0;u<n;u++){var s=score(Q[t],K[u],C,P.m,P.kap);row.push(s);if(s>mx)mx=s}
+  S.push(row);var e=row.map(function(s){return Math.exp(s-mx)}),z=e.reduce(function(a,b){return a+b},0);
+  A.push(e.map(function(v){return v/z}));
+  var y=Float64Array.from(X[t]);for(u=0;u<n;u++)for(var d=0;d<4*C;d++)y[d]+=A[t][u]*V[u][d];Y.push(y)}
+ return{S:S,A:A,Y:Y}}
+function pool(Y,C){var m=new Float64Array(4*C);Y.forEach(function(y){for(var i=0;i<m.length;i++)m[i]+=y[i]/Y.length});return m}
+function cos(a,b){var d=0,x=0,y=0;for(var i=0;i<a.length;i++){d+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i]}return d/(Math.sqrt(x*y)+1e-12)}
+function heat(el,toks,A){
+ if(!toks.length){el.textContent="Type some words.";return}
+ var h="<table class='hm'><tr><th></th>"+toks.map(function(t){return"<th>"+t.replace(/</g,"&lt;")+"</th>"}).join("")+"</tr>";
+ for(var i=0;i<toks.length;i++){h+="<tr><th>"+toks[i].replace(/</g,"&lt;")+"</th>";
+  for(var j=0;j<toks.length;j++){var v=A[i][j];h+="<td title='"+v.toFixed(3)+"' style='background:rgba(var(--acc-rgb),"+Math.min(1,v*1.6).toFixed(2)+")'>"+v.toFixed(2)+"</td>"}
+  h+="</tr>"}
+ el.innerHTML=h+"</table>"}
+function rot(){var r=[0,0,0,0].map(function(){return gauss(Math.random)}),n=Math.hypot.apply(null,r);return Float64Array.from(r.map(function(x){return x/n}))}
+function update(){
+ var C=+$("C").value,seed=+$("seed").value||0,kap=+$("kappa").value,m=$("metric").value;
+ $("kv").textContent=kap.toFixed(1);
+ var P={C:C,m:m,kap:kap,Wq:weights("q",C,seed),Wk:weights("k",C,seed),Wv:weights("v",C,seed)};
+ var ta=tok($("a").value),tb=tok($("b").value);
+ var XA=ta.map(function(w){return embed(w,C,seed)}),XB=tb.map(function(w){return embed(w,C,seed)});
+ var RA=run(XA,P),RB=run(XB,P);
+ heat($("hmA"),ta,RA.A);heat($("hmB"),tb,RB.A);
+ $("sim").textContent=(ta.length&&tb.length)?cos(pool(RA.Y,C),pool(RB.Y,C)).toFixed(3):"–";
+ // rotation test on sentence A
+ if(ta.length){
+  var r=rot(),Xr=XA.map(function(x){var o=new Float64Array(4*C);for(var c=0;c<C;c++)qmul(r,0,x,4*c,o,4*c);return o}),R2=run(Xr,P),d1=0,d2=0;
+  for(var i=0;i<ta.length;i++){for(var j=0;j<ta.length;j++)d1=Math.max(d1,Math.abs(RA.S[i][j]-R2.S[i][j]));
+   var ry=new Float64Array(4*C);for(var c2=0;c2<C;c2++)qmul(r,0,RA.Y[i],4*c2,ry,4*c2);
+   for(var d=0;d<4*C;d++)d2=Math.max(d2,Math.abs(ry[d]-R2.Y[i][d]))}
+  $("rq").textContent="["+Array.from(r).map(function(x){return x.toFixed(2)}).join(", ")+"]";
+  $("d1").innerHTML="<span class='ok'>"+d1.toExponential(1)+"</span>";
+  $("d2").innerHTML="<span class='ok'>"+d2.toExponential(1)+"</span>"}
+ var pq=3*4*C*C,pr=3*16*C*C;
+ $("pq").textContent=pq.toLocaleString();$("pr").textContent=pr.toLocaleString();$("pt").textContent=(pr/pq).toFixed(1)+"× fewer"}
+["a","b"].forEach(function(id){$(id).addEventListener("input",update)});
+["metric","kappa","C","seed"].forEach(function(id){$(id).addEventListener("input",update)});
+$("rerun").addEventListener("click",update);
+update();
+})();
+</script>
+</body>
+</html>
